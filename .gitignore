@@ -1,0 +1,7 @@
+# Ignore all files by default
+*
+
+# Whitelist gitignore, README and the final JSON workflow file
+!.gitignore
+!README.md
+!ARC_AI_Blog_Automation_FINAL.json
