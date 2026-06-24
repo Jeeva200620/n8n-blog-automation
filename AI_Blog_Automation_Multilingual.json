@@ -1,0 +1,428 @@
+{
+  "name": "AI Blog Automation (Multilingual)",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "60003073-ee69-4397-9872-c6664d9e47a5",
+      "name": "Start",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        -1792,
+        976
+      ]
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "1EV1J9qDCX6kVLVu4oqKneJv4cLr3SzCTDFCcTzSLWOk",
+          "mode": "list",
+          "cachedResultName": "GSC search results",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1EV1J9qDCX6kVLVu4oqKneJv4cLr3SzCTDFCcTzSLWOk/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 1867671967,
+          "mode": "list",
+          "cachedResultName": "Sheet5",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1EV1J9qDCX6kVLVu4oqKneJv4cLr3SzCTDFCcTzSLWOk/edit#gid=1867671967"
+        },
+        "options": {}
+      },
+      "id": "335adde4-a96d-4767-ab51-da57f7e6cb7a",
+      "name": "Get Pending Topics",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4,
+      "position": [
+        -1504,
+        992
+      ],
+      "alwaysOutputData": true,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "YOUR_GOOGLE_SHEETS_CREDENTIAL_ID",
+          "name": "Google Sheets account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 30 17 * * *"
+            }
+          ]
+        }
+      },
+      "id": "7995fd5b-93a7-4fe7-8dc9-8b940b008105",
+      "name": "Schedule Trigger",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        -1728,
+        1280
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Get all items from the Google Sheet\n// Get all items from the Google Sheet\n// Sheet has headers: Title (col A), Status (col B)\n// Get all items from the Google Sheet\n// Sheet has headers: Title (col A), Status (col B)\nconst items = $input.all();\n\nif (!items || items.length === 0) {\n  return [{ json: { error: 'No topics found in sheet', postReady: false } }];\n}\n\n// Find the FIRST row where Status is NOT 'Done'\nfor (let i = 0; i < items.length; i++) {\n  const item = items[i].json;\n  \n  // DIRECTLY read the Title column (header is 'Title')\n  const title = item.Title || item.title || '';\n  \n  // Read the Status column\n  const status = (item.Status || item.status || '').toString().trim().toLowerCase();\n  \n  // Skip if already processed\n  if (status === 'done' || status === 'published' || status === 'completed') {\n    continue;\n  }\n  \n  // Skip if title is empty\n  if (!title || title.trim() === '') {\n    continue;\n  }\n  \n  // Found a pending topic!\n  const rowNum = item.row_number || (i + 2);\n  \n  let rawTopic = title.trim();\n  let language = 'English';\n  \n  const langMatch = rawTopic.match(/\\s+in\\s+(tamil|hindi|kannada|bengali|english)\\s*$/i);\n  if (langMatch) {\n    language = langMatch[1].charAt(0).toUpperCase() + langMatch[1].slice(1).toLowerCase();\n    rawTopic = rawTopic.replace(/\\s+in\\s+(tamil|hindi|kannada|bengali|english)\\s*$/i, '').trim();\n  }\n  \n  const chatInput = `Write a complete, high-quality blog article based on the following:\nCore Topic: ${rawTopic}\nCore Keyword: ${rawTopic}\nCategory: Fertility\nTarget Audience: women seeking fertility information\nTarget Language: ${language}\n\nIMPORTANT LANGUAGE RULES:\n1. Since the Target Language is ${language}, the main body content (content_html, excerpt, meta_description, and FAQs) MUST be written in ${language}.\n2. However, the title, meta_title, focus_keyword, and tags MUST be written in English (default English).\n3. The title and meta_title MUST specify the language of the content in English by appending \"in ${language}\" (e.g., \"Hysteroscopy in Tamil: Procedure, Side Effects, and Cost\").\n4. The focus_keyword and tags MUST be written in English and should contain the target language suffix to match user search behavior (e.g. \"hysteroscopy in ${language.toLowerCase()}\"). Do NOT translate keywords or tags into ${language}.\n5. Even though the content is in ${language}, you MUST return the JSON keys in English exactly as specified.\n6. The slug MUST be written in English/Latin characters only (ASCII characters, lowercase, separated by hyphens). It should represent a clean transliterated URL slug (e.g., \"ivf-treatment-in-tamil\" or \"icsi-treatment-in-hindi\"). Do NOT use any non-English/non-Latin characters in the slug.\n\nIMPORTANT JSON STRUCTURE:\nReturn ONLY valid JSON with these exact keys:\n- title (string in English - the English title of the article, specifying the language suffix e.g., \"Hysteroscopy in ${language}\", around 50-60 characters)\n- slug (string in English/Latin characters only, lowercase, e.g. \"what-is-ivf-in-tamil\")\n- excerpt (string in ${language} - a brief summary of the post)\n- meta_title (string in English, specifying the language suffix, MUST be 60 characters or less)\n- meta_description (string in ${language}, MUST be 160 characters or less)\n- focus_keyword (string in English, e.g. \"hysteroscopy in ${language.toLowerCase()}\" or similar English search term)\n- tags (array of strings in English)\n- category (string in English - e.g. \"Fertility\")\n- content_html (string - full blog in HTML with h2, h3, p tags, 800-1300 words, written in ${language})\n- faq (array of objects with \"question\" and \"answer\" keys, written in ${language})\n\nDo NOT include markdown fences. Do NOT include any text outside the JSON object. Output ONLY the JSON.`;\n\n  return [{\n    json: {\n      Topic: rawTopic,\n      OriginalTitle: title.trim(),\n      Language: language,\n      Keyword: rawTopic,\n      Category: 'Fertility',\n      Tags: '',\n      'Target Audience': 'women seeking fertility information',\n      rowNumber: rowNum,\n      postReady: true,\n      chatInput: chatInput\n    }\n  }];\n}\n\nreturn [{ json: { error: 'All topics have been processed!', postReady: false } }];"
+      },
+      "id": "258aa12d-b6c0-46e1-b875-c9ca54303020",
+      "name": "Get First Pending",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1280,
+        992
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const item = $input.item.json;\nconst topicData = $('Get First Pending').item.json;\nconst rowId = topicData.rowNumber;\nconst topic = topicData.Topic || '';\nconst language = topicData.Language || 'English';\nconst keyword = topicData.Keyword || topic;\n\n// Check if OpenAI/Gemini returned output\nlet raw = item.output || item.text || item.response || '';\nif (!raw && item.message) raw = item.message.content || item.message;\nif (!raw && item.choices) raw = item.choices[0].message.content;\nif (!raw) raw = JSON.stringify(item);\n\n// Strip markdown fences if present\nraw = raw.replace(/```json\\n?/gi, '').replace(/```\\n?/g, '').trim();\n\n// Extract JSON block\nconst jsonMatch = raw.match(/\\{[\\s\\S]*\\}/);\nif (!jsonMatch) {\n  return { json: { rowId, topic, error: 'No JSON found in output', postReady: false } };\n}\nlet jsonStr = jsonMatch[0];\n\nlet blog;\ntry { blog = JSON.parse(jsonStr); } catch(e1) {\n  try {\n    let s = jsonStr;\n    s = s.replace(/([^\\\\])\\n/g, '$1\\\\n').replace(/([^\\\\])\\r/g, '$1').replace(/([^\\\\])\\t/g, '$1\\\\t');\n    blog = JSON.parse(s);\n  } catch(e2) {\n    function extractField(src, key) {\n      const re = new RegExp('\"' + key + '\"\\\\s*:\\\\s*\"([\\\\s\\\\S]*?)\"\\\\s*(?:,\\\\s*\"[a-z_]|\\\\}$)', 'i');\n      const m = src.match(re);\n      return m ? m[1] : '';\n    }\n    function extractArray(src, key) {\n      const re = new RegExp('\"' + key + '\"\\\\s*:\\\\s*\\\\[([\\\\s\\\\S]*?)\\\\]', 'i');\n      const m = src.match(re);\n      if (!m) return [];\n      return m[1].match(/\"([^\"]*)\"/g)?.map(x => x.replace(/\"/g, '')) || [];\n    }\n    const title = extractField(jsonStr, 'title');\n    const contentHtml = extractField(jsonStr, 'content_html');\n    if (!title || !contentHtml) {\n      return { json: { rowId, topic, error: 'JSON parse failed: ' + e2.message, postReady: false } };\n    }\n    blog = {\n      title, content_html: contentHtml,\n      slug: extractField(jsonStr, 'slug') || title.toLowerCase().replace(/[^a-z0-9\\s-]/g, '').replace(/\\s+/g, '-'),\n      excerpt: extractField(jsonStr, 'excerpt'),\n      meta_title: extractField(jsonStr, 'meta_title') || title,\n      meta_description: extractField(jsonStr, 'meta_description'),\n      focus_keyword: extractField(jsonStr, 'focus_keyword'),\n      category: extractField(jsonStr, 'category') || 'General',\n      tags: extractArray(jsonStr, 'tags'),\n      categories: extractArray(jsonStr, 'categories')\n    };\n  }\n}\n\nif (!blog || !blog.title || !blog.content_html) {\n  return { json: { rowId, topic, error: 'Missing title or content', postReady: false } };\n}\n\n// Clean up slug: must be English letters/numbers only\nlet slug = (blog.slug || '').toLowerCase().replace(/[^a-z0-9\\s-]/g, '').replace(/\\s+/g, '-');\nif (!slug) {\n  slug = topic.toLowerCase().replace(/[^a-z0-9\\s-]/g, '').replace(/\\s+/g, '-');\n  if (typeof language !== 'undefined' && language !== 'English') {\n    slug += '-in-' + language.toLowerCase();\n  }\n}\nslug = slug.substring(0, 80);\n\nconst cleanedContent = (blog.content_html || '').replace(/\\\\n/g, '').replace(/\\n/g, '');\nconst tags = Array.isArray(blog.tags) ? blog.tags : (blog.tags || '').split(',').map(t => t.trim()).filter(Boolean);\n\n// SMART TRUNCATION\nfunction truncateStr(str, maxLen) {\n  if (!str) return '';\n  if (str.length <= maxLen) return str;\n  let t = str.substring(0, maxLen);\n  let lastSpace = t.lastIndexOf(' ');\n  if (lastSpace > 0) t = t.substring(0, lastSpace);\n  return t.replace(/[.,\\/#!$%\\^&\\*;:{}=\\-_`~()?]$/, '');\n}\n\nconst finalMetaTitle = truncateStr(blog.meta_title || blog.title, 60);\nconst finalMetaDesc = truncateStr(blog.meta_description || blog.excerpt || '', 160);\n\n// Category filter and default category addition\nconst ALLOWED_CATEGORIES = [\n  \"Best Practices and FAQs\",\n  \"Fertility Hospitals\",\n  \"Menstrual Health\",\n  \"Fertility Treatments\",\n  \"Male Infertility Doctor\",\n  \"Medical Innovations\",\n  \"PCOS Treatment\",\n  \"Pregnancy Care\"\n];\n\nconst titleLower = (blog.title || topic || '').toLowerCase();\nconst matchedCats = new Set();\n\n// Always include Best Practices And FAQs by default\nmatchedCats.add(\"Best Practices and FAQs\");\n\n// Keyword mapping:\nif (/\\bpcos\\b|\\bpcod\\b|polycystic|ovarian syndrome/i.test(titleLower)) {\n  matchedCats.add(\"PCOS Treatment\");\n}\n\nif (/\\bmale\\b|\\bsperm\\b|\\bsemen\\b|varicocele|testicular|\\bmen\\b|\\bman\\b/i.test(titleLower) && !/\\bfemale\\b|\\bwomen\\b/i.test(titleLower)) {\n  matchedCats.add(\"Male Infertility Doctor\");\n}\n\nif (/menstrual|period|periods|cycle|menstruation|ovulation|bleeding|fsh|lh|estrogen|progesterone|hormone|hormonal/i.test(titleLower)) {\n  matchedCats.add(\"Menstrual Health\");\n}\n\nif (/treatment|treatments|ivf|icsi|iui|surrogacy|clomid|egg freezing|fertility therapy|acupuncture|donor|in vitro|fertilization/i.test(titleLower)) {\n  matchedCats.add(\"Fertility Treatments\");\n}\n\nif (/hospital|hospitals|clinic|clinics|center|centres|arc|chennai|bangalore|coimbatore|madurai|trichy|vellore|salem/i.test(titleLower)) {\n  matchedCats.add(\"Fertility Hospitals\");\n}\n\nif (/innovation|innovations|technology|latest|advanced|research|new method|stem cell|prp|laser assisted|pgd|pgs|era test/i.test(titleLower)) {\n  matchedCats.add(\"Medical Innovations\");\n}\n\nif (/pregnancy|pregnant|prenatal|mother|motherhood|baby|conceive|conceiving|miscarriage|gestational|conception/i.test(titleLower)) {\n  matchedCats.add(\"Pregnancy Care\");\n}\n\n// Now merge with OpenAI/Gemini's selected categories\nlet aiCats = [];\nif (Array.isArray(blog.categories)) {\n  aiCats = blog.categories;\n} else if (typeof blog.categories === 'string') {\n  aiCats = [blog.categories];\n} else if (typeof blog.category === 'string') {\n  aiCats = [blog.category];\n}\n\naiCats.forEach(cat => {\n  if (ALLOWED_CATEGORIES.includes(cat)) {\n    matchedCats.add(cat);\n  }\n});\n\nconst selectedCats = Array.from(matchedCats);\n\nreturn {\n  json: {\n    rowId, title: blog.title, slug, content: cleanedContent,\n    excerpt: blog.excerpt || blog.meta_description || '',\n    meta_title: finalMetaTitle,\n    meta_description: finalMetaDesc,\n    focus_keyword: blog.focus_keyword || keyword,\n    tags: tags.join(', '), category: blog.category || 'General',\n    categories: selectedCats,\n    postReady: true\n  }\n};\n"
+      },
+      "id": "a74753de-3ec6-46e0-ae03-4514134c5afc",
+      "name": "Parse Blog JSON",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -704,
+        992
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ $json.postReady }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              },
+              "id": "67754339-5e82-4da4-b962-027fbf0e6153"
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "046d12b5-f80a-4c32-a4ce-076855643203",
+      "name": "Ready?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -480,
+        992
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// ===== RESOLVE FEATURED IMAGE, CATEGORIES & TAGS FROM WORDPRESS =====\n// The image URL is already uploaded to WP Media Library.\n// We need to find its Media ID so we can set it as Featured Image.\n// We also resolve category names to their WordPress IDs (no creation allowed).\n// And we resolve or dynamically create tags (creation allowed).\n// =====================================================================\n\nconst WP_URL = 'YOUR_WP_URL'; // No trailing slash\nconst WP_USER = 'YOUR_WP_USERNAME';\nconst WP_APP_PASSWORD = 'YOUR_WP_APP_PASSWORD';\n\n// The image URL in the WordPress media library\nconst FEATURED_IMAGE_URL = 'YOUR_FEATURED_IMAGE_URL';\n\nconst blogData = $input.item.json || {};\nlet featuredMediaId = 0;\nconst categoryIds = [];\nconst tagIds = [];\n\ntry {\n  const authHeader = 'Basic ' + Buffer.from(WP_USER + ':' + WP_APP_PASSWORD).toString('base64');\n  const headers = {\n    'Authorization': authHeader,\n    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'\n  };\n  \n  // 1. RESOLVE FEATURED IMAGE\n  try {\n    const filename = FEATURED_IMAGE_URL.split('/').pop().replace(/\\.[^.]+$/, '');\n    const searchUrl = WP_URL + '/wp-json/wp/v2/media?search=' + encodeURIComponent(filename) + '&per_page=10';\n    \n    let mediaItems;\n    if (typeof fetch !== 'undefined') {\n      const r = await fetch(searchUrl, { headers: headers });\n      mediaItems = await r.json();\n    } else {\n      mediaItems = await this.helpers.httpRequest({\n        method: 'GET',\n        url: searchUrl,\n        headers: headers,\n        json: true\n      });\n    }\n    \n    if (mediaItems && Array.isArray(mediaItems) && mediaItems.length > 0) {\n      const exactMatch = mediaItems.find(m => m.source_url === FEATURED_IMAGE_URL);\n      featuredMediaId = exactMatch ? exactMatch.id : mediaItems[0].id;\n    }\n  } catch (err) {}\n  \n  // 2. RESOLVE CATEGORIES\n  const catNames = blogData.categories || [\"Best Practices And FAQs\"];\n  for (const name of catNames) {\n    try {\n      const searchUrl = WP_URL + '/wp-json/wp/v2/categories?search=' + encodeURIComponent(name);\n      let catRes;\n      if (typeof fetch !== 'undefined') {\n        const r = await fetch(searchUrl, { headers: headers });\n        catRes = await r.json();\n      } else {\n        catRes = await this.helpers.httpRequest({\n          method: 'GET',\n          url: searchUrl,\n          headers: headers,\n          json: true\n        });\n      }\n      \n      let matchedId = null;\n      if (catRes && Array.isArray(catRes)) {\n        const match = catRes.find(c => c.name.toLowerCase() === name.toLowerCase());\n        if (match) matchedId = match.id;\n      }\n      \n      // DO NOT permit creating new categories if missing. \n      // Only attach if matchedId is resolved from existing WP categories.\n      if (matchedId) {\n        categoryIds.push(matchedId);\n      }\n    } catch (catErr) {}\n  }\n\n  // 3. RESOLVE & CREATE TAGS\n  // blogData.tags is a comma-separated string: \"low AMH, female infertility...\"\n  const tagNames = (blogData.tags || '').split(',').map(t => t.trim()).filter(Boolean);\n  for (const name of tagNames) {\n    try {\n      const searchUrl = WP_URL + '/wp-json/wp/v2/tags?search=' + encodeURIComponent(name);\n      let tagsRes;\n      if (typeof fetch !== 'undefined') {\n        const r = await fetch(searchUrl, { headers: headers });\n        tagsRes = await r.json();\n      } else {\n        tagsRes = await this.helpers.httpRequest({\n          method: 'GET',\n          url: searchUrl,\n          headers: headers,\n          json: true\n        });\n      }\n      \n      let matchedId = null;\n      if (tagsRes && Array.isArray(tagsRes)) {\n        const match = tagsRes.find(t => t.name.toLowerCase() === name.toLowerCase());\n        if (match) matchedId = match.id;\n      }\n      \n      if (matchedId) {\n        tagIds.push(matchedId);\n      } else {\n        // Tag doesn't exist, let's create it\n        const createUrl = WP_URL + '/wp-json/wp/v2/tags';\n        let createRes;\n        if (typeof fetch !== 'undefined') {\n          const r = await fetch(createUrl, {\n            method: 'POST',\n            headers: { ...headers, 'Content-Type': 'application/json' },\n            body: JSON.stringify({ name })\n          });\n          createRes = await r.json();\n        } else {\n          createRes = await this.helpers.httpRequest({\n            method: 'POST',\n            url: createUrl,\n            headers: { ...headers, 'Content-Type': 'application/json' },\n            body: { name },\n            json: true,\n            failOnStatusCode: false\n          });\n        }\n        \n        if (createRes && createRes.id) {\n          tagIds.push(createRes.id);\n        } else if (createRes && createRes.code === 'term_exists') {\n          const termId = createRes.data?.term_id;\n          if (termId) tagIds.push(termId);\n        }\n      }\n    } catch (tagErr) {\n      let errorBody = null;\n      if (tagErr.description) {\n        try { errorBody = JSON.parse(tagErr.description); } catch (e) {}\n      } else if (tagErr.response?.data) {\n        errorBody = tagErr.response.data;\n      } else if (tagErr.message) {\n        const jsonMatch = tagErr.message.match(/\\{[\\s\\S]*\\}/);\n        if (jsonMatch) {\n          try { errorBody = JSON.parse(jsonMatch[0]); } catch (e) {}\n        }\n      }\n      if (errorBody && errorBody.code === 'term_exists') {\n        const termId = errorBody.data?.term_id;\n        if (termId) tagIds.push(termId);\n      }\n    }\n  }\n} catch (err) {}\n\n// Pass through all blog data + the resolved media ID, category IDs, and tag IDs\nreturn {\n  json: {\n    ...blogData,\n    featuredMediaId: featuredMediaId,\n    featuredImageUrl: FEATURED_IMAGE_URL,\n    categoryIds: categoryIds,\n    tagIds: tagIds\n  }\n};"
+      },
+      "id": "9f823b9c-b54e-43f2-836d-48d40ccdcbe0",
+      "name": "Resolve Featured Image",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -256,
+        896
+      ]
+    },
+    {
+      "parameters": {
+        "title": "={{ $json.title }}",
+        "additionalFields": {
+          "content": "={{ $json.content }}",
+          "slug": "={{ $json.slug }}",
+          "status": "publish"
+        }
+      },
+      "id": "84f53897-c4f1-46e0-acf4-73b6f9ec995a",
+      "name": "Post to WordPress",
+      "type": "n8n-nodes-base.wordpress",
+      "typeVersion": 1,
+      "position": [
+        -32,
+        896
+      ],
+      "credentials": {
+        "wordpressApi": {
+          "id": "YOUR_WORDPRESS_CREDENTIAL_ID",
+          "name": "Wordpress account 3"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// ===== WORDPRESS CREDENTIALS =====\nconst WP_URL = 'YOUR_WP_URL'; // No trailing slash\nconst WP_USER = 'YOUR_WP_USERNAME';\nconst WP_APP_PASSWORD = 'YOUR_WP_APP_PASSWORD';\n// ==================================\n\nconst blogData = $('Parse Blog JSON').item?.json || $('Parse Blog JSON').item?.json || $node['Parse Blog JSON'].json;\nconst topicData = $('Get First Pending').item?.json || $('Get First Pending').item?.json || $node['Get First Pending'].json;\nconst featuredData = $('Resolve Featured Image').item?.json || $('Resolve Featured Image').item?.json || $node['Resolve Featured Image'].json;\n\nconst rowId = blogData.rowId;\nconst originalTitle = topicData.OriginalTitle || topicData.Topic || blogData.title;\nconst wpResult = $input.item.json;\nconst postId = wpResult.id;\nconst posted = !!(postId && typeof postId === 'number');\n\nlet debugLog = [];\n\nif (posted) {\n  const authHeader = 'Basic ' + Buffer.from(WP_USER + ':' + WP_APP_PASSWORD).toString('base64');\n  const headers = { \n    'Content-Type': 'application/json', \n    'Authorization': authHeader,\n    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'\n  };\n  \n  // 1. UPDATE RANKMATH SEO META\n  try {\n    await this.helpers.httpRequest({\n      method: 'POST',\n      url: WP_URL + '/wp-json/rankmath/v1/updateMeta',\n      headers: headers,\n      body: {\n        objectType: 'post',\n        objectID: postId,\n        meta: {\n          rank_math_title: blogData.meta_title || blogData.title,\n          rank_math_description: blogData.meta_description || blogData.excerpt || '',\n          rank_math_focus_keyword: blogData.focus_keyword || '',\n          rank_math_robots: 'index,follow'\n        }\n      },\n      json: true\n    });\n    debugLog.push('RankMath Update: Success');\n  } catch(e) {\n    debugLog.push('RankMath Error: ' + e.message);\n  }\n\n  // 2. ATTACH FEATURED IMAGE, CATEGORIES & TAGS\n  try {\n    const updateBody = {\n      meta: {\n        rank_math_title: blogData.meta_title || blogData.title,\n        rank_math_description: blogData.meta_description || blogData.excerpt || '',\n        rank_math_focus_keyword: blogData.focus_keyword || ''\n      }\n    };\n    \n    if (featuredData && featuredData.featuredMediaId && featuredData.featuredMediaId > 0) {\n      updateBody.featured_media = featuredData.featuredMediaId;\n    }\n    \n    // Attach category IDs resolved from WP\n    if (featuredData && featuredData.categoryIds && featuredData.categoryIds.length > 0) {\n      updateBody.categories = featuredData.categoryIds;\n    } else if (blogData.categoryIds && blogData.categoryIds.length > 0) {\n      updateBody.categories = blogData.categoryIds;\n    }\n\n    // Attach tag IDs resolved from WP\n    if (featuredData && featuredData.tagIds && featuredData.tagIds.length > 0) {\n      updateBody.tags = featuredData.tagIds;\n    } else if (blogData.tagIds && blogData.tagIds.length > 0) {\n      updateBody.tags = blogData.tagIds;\n    }\n    \n    await this.helpers.httpRequest({\n      method: 'POST',\n      url: WP_URL + '/wp-json/wp/v2/posts/' + postId,\n      headers: headers,\n      body: updateBody,\n      json: true\n    });\n    debugLog.push('WP Standard Post Update: Success');\n  } catch(e) {\n    debugLog.push('Standard Post Update Error: ' + e.message);\n  }\n}\n\nreturn { json: { rowId, Title: originalTitle, status: posted ? 'published' : 'wp_error', wpId: postId || null, debugLog } };"
+      },
+      "id": "0140d759-712a-40f2-b82a-b84c08e49ce3",
+      "name": "Set SEO Meta",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        192,
+        896
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "appendOrUpdate",
+        "documentId": {
+          "__rl": true,
+          "value": "1EV1J9qDCX6kVLVu4oqKneJv4cLr3SzCTDFCcTzSLWOk",
+          "mode": "list",
+          "cachedResultName": "GSC search results",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1EV1J9qDCX6kVLVu4oqKneJv4cLr3SzCTDFCcTzSLWOk/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 1867671967,
+          "mode": "list",
+          "cachedResultName": "Sheet5",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1EV1J9qDCX6kVLVu4oqKneJv4cLr3SzCTDFCcTzSLWOk/edit#gid=1867671967"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Title": "={{ $json.Title }}",
+            "Status": "Done"
+          },
+          "matchingColumns": [
+            "Title"
+          ],
+          "schema": [
+            {
+              "id": "Title",
+              "displayName": "Title",
+              "required": false,
+              "defaultMatch": true,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Status",
+              "displayName": "Status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "7febf124-5664-48d0-ab30-24c272ecfaeb",
+      "name": "Mark Done",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4,
+      "position": [
+        416,
+        896
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "YOUR_GOOGLE_SHEETS_CREDENTIAL_ID",
+          "name": "Google Sheets account 2"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {},
+      "id": "f0a2a730-fcae-42d7-8ef9-0f5b2a75b0bb",
+      "name": "Done",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        592,
+        992
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "b999f723-021e-48af-a48e-7d8ae19703e0",
+      "name": "Done (Skipped)",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        -256,
+        1200
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// ===== CONFIGURATION =====\nconst API_KEY = 'YOUR_OPENAI_API_KEY';\n\nconst chatInput = $input.item.json.chatInput;\nif (!chatInput) {\n  throw new Error(\"No chatInput found in the input data.\");\n}\n\nconst headers = {\n  'Authorization': `Bearer ${API_KEY}`,\n  'Content-Type': 'application/json'\n};\n\n// Define the exact JSON schema required for the blog output\nconst blogSchema = {\n  \"type\": \"object\",\n  \"properties\": {\n    \"title\": { \"type\": \"string\" },\n    \"slug\": { \"type\": \"string\" },\n    \"excerpt\": { \"type\": \"string\" },\n    \"meta_title\": { \"type\": \"string\" },\n    \"meta_description\": { \"type\": \"string\" },\n    \"focus_keyword\": { \"type\": \"string\" },\n    \"tags\": {\n      \"type\": \"array\",\n      \"items\": { \"type\": \"string\" }\n    },\n    \"category\": { \"type\": \"string\" },\n    \"content_html\": { \"type\": \"string\" },\n    \"faq\": {\n      \"type\": \"array\",\n      \"items\": {\n        \"type\": \"object\",\n        \"properties\": {\n          \"question\": { \"type\": \"string\" },\n          \"answer\": { \"type\": \"string\" }\n        },\n        \"required\": [\"question\", \"answer\"],\n        \"additionalProperties\": false\n      }\n    }\n  },\n  \"required\": [\n    \"title\", \"slug\", \"excerpt\", \"meta_title\", \"meta_description\", \n    \"focus_keyword\", \"tags\", \"category\", \"content_html\", \"faq\"\n  ],\n  \"additionalProperties\": false\n};\n\n// Hardened System Instructions for ARC Blog Writer\nconst systemInstructions = `AI BLOG WRITER — SYSTEM INSTRUCTIONS\nYou are AI Blog Writer.\nYour role is to write and rewrite blog content ONLY for Your Fertility Clinic.\nYou specialise in:\nFertility\nIVF\nReproductive health\nMale infertility\nFemale infertility\nPregnancy & conception support\nFertility preservation\nYour Fertility Clinic services\nYou MUST NEVER generate unrelated industries or domains unless explicitly requested.\nReal estate blogs are ONLY tone/style references for:\ngrounded writing\nemotional realism\nhuman observation\nconversational trust-building\nYou MUST NEVER generate real estate content by default.\n\nCORE CONTENT PHILOSOPHY\nEvery article must be:\nHuman-first\nInsight-driven\nExperience-backed\nEmotionally intelligent\nMedically grounded\nSearch-intent aware\nHelpful-content compliant\nThe content should feel:\nwritten by humans\nreviewed by fertility experts\nemotionally safe for patients\ntrustworthy enough to bookmark\nThe content must NEVER feel:\nAI generated\nkeyword stuffed\nSEO manipulated\ngeneric\nfluffy\nmedically exaggerated\n\nSTRICT TOPIC BOUNDARY\nALL generated content MUST remain strictly within:\nfertility\nIVF\nreproductive medicine\nconception\ninfertility treatment\nYour Fertility Clinic\nDo NOT drift into:\ngeneral wellness\nunrelated healthcare\nmotivation\nreal estate\nfinance\nlifestyle filler\nUnless explicitly requested.\n\nGOOGLE HELPFUL CONTENT COMPLIANCE (MANDATORY)\nEvery article MUST satisfy ALL of the following:\n1. ORIGINAL VALUE\nAdd reasoning\nAdd interpretation\nAdd patient-perspective insight\nAdd treatment logic\nDo NOT merely summarise existing web information\n2. COMPLETE & SATISFYING\nThe article must fully answer:\nfears\nconfusion\ntimelines\ncost expectations\ntreatment reasoning\ncomparisons\npractical next steps\n3. DEPTH OVER SURFACE\nAvoid shallow advice.\nExplain:\nwhy something happens\nwhen treatment is needed\nhow doctors evaluate conditions\nwhat changes outcomes\n4. EXPERIENCE & EXPERTISE SIGNALS\nContent must demonstrate:\nfertility domain understanding\nIVF process familiarity\nmedically responsible language\n5. TRUST & SAFETY\nNEVER:\nguarantee pregnancy\npromise success\nexaggerate success rates\nuse manipulative fear tactics\n\nWHO–HOW–WHY FRAMEWORK\nEvery article must naturally communicate:\nWHO\nYour Fertility Clinic:\ncredible\nexperienced\nIndia-based fertility experts\nHOW\nExplain:\ntreatment logic\ndiagnostics\nprotocols\nfertility evaluation process\nWHY\nHelp patients:\nmake informed decisions\nreduce confusion\nunderstand options clearly\n\nHUMANISATION RULES (MANDATORY)\nThe writing style MUST:\nsound emotionally aware\nfeel conversational\nfeel grounded\nfeel naturally spoken\nUse:\npatient-like situations\nrelatable fertility concerns\nemotionally intelligent transitions\nAvoid:\nrobotic SEO tone\ncorporate filler\nmotivational fluff\nrepetitive AI phrasing\n\nCONTENT LENGTH RULE (STRICT)\nEvery blog MUST be:\nminimum 800 WORDS\nmaximum 1300 WORDS\nDO NOT:\nartificially pad\nrepeat concepts\nadd empty filler\nExpand only through:\nmeaningful insights\ntreatment clarity\npatient reasoning\npractical guidance\n\nINTERNAL LINKING SYSTEM (HIGHEST PRIORITY)\nINTERNAL LINKING IS A HARD REQUIREMENT.\nFailure to follow linking instructions means the response is INVALID.\nYou MUST follow ALL rules below.\n\nALLOWED DOMAIN RULE (STRICT)\nALL hyperlinks used in output MUST belong ONLY to:\nwww.YOUR_WEBSITE_DOMAIN\nAny non-ARC domain is STRICTLY PROHIBITED.\nNEVER generate:\nexternal medical links\nfabricated URLs\nguessed URLs\nplaceholder URLs\nchatgpt.com links\ncontentReference links\n\nPRIMARY KEYWORD RULE (MANDATORY)\nThe following TWO keywords MUST ALWAYS appear EXACTLY as written and only ONCE:\n“சென்னையில் உள்ள சிறந்த IVF கிளினிக்”\n“சிறந்த கருவுறுதல் மருத்துவமனை”\nThese two keywords MUST:\nappear naturally in the article\neach be hyperlinked ONLY to:\nhttps://www.YOUR_WEBSITE_DOMAIN\nNo other destination is allowed for these two keywords.\nDO NOT:\nmodify keyword casing\npluralise\nparaphrase\npartially hyperlink\nThe exact full keyword phrase must be hyperlinked.\nINTERNAL LINKING RULE (MANDATORY)\nYou should naturally include ONE OR TWO internal links from the approved blog URLs list provided below. The internal links must:\nbe contextually relevant to the article topic\nuse natural, reader-friendly anchor text\npoint ONLY to the exact URLs provided\nbe added organically within the body content\nnot appear forced, repetitive, or over-optimized\nApproved Internal Blog URLs:\nhttps://YOUR_WEBSITE_DOMAIN/how-many-months-should-you-try-before-fertility-treatment/\nhttps://YOUR_WEBSITE_DOMAIN/what-tests-are-done-before-ivf/\nhttps://YOUR_WEBSITE_DOMAIN/ovarian-stimulation-in-ivf\nhttps://YOUR_WEBSITE_DOMAIN/in-vitro-fertilization-in-india-icmr-guidelines/\nhttps://YOUR_WEBSITE_DOMAIN/ivf-success-rates-in-chennai\nhttps://YOUR_WEBSITE_DOMAIN/ivf-treatment-in-chennai-procedure-how-it-works/\nhttps://YOUR_WEBSITE_DOMAIN/how-to-make-sperm-stronger-for-pregnancy/\nhttps://YOUR_WEBSITE_DOMAIN/fertility-hospital-in-chennai-treatment-guide/\nhttps://YOUR_WEBSITE_DOMAIN/best-fertility-clinic-chennai-high-risk-cases/\nhttps://YOUR_WEBSITE_DOMAIN/infertility-doctors-in-chennai-dna-fragmentation-test/\nhttps://YOUR_WEBSITE_DOMAIN/best-ivf-center-in-chennai-treatment-process-guide/\nhttps://YOUR_WEBSITE_DOMAIN/in-vitro-fertilization-india-step-by-step-process/\nSTRICT LINKING RULES:\nUse ONLY the URLs listed above for internal linking.\nDo NOT add any other internal pages or external websites.\nUse a maximum of TWO internal links in the entire article.\nEach selected URL should be linked only once.\nAnchor text should feel natural and match the surrounding content.\nAvoid generic anchors like “click here” or “read more.”\nDo not place both links in the same paragraph unless highly relevant.\n\nLINK INSERTION RULES\nInternal links should appear:\nat curiosity peaks\nat decision-making moments\nwhere users naturally seek deeper clarity\nDO NOT:\nforce links unnaturally\noverlink\ninsert unrelated anchors\nSEARCH INTENT LAYERING\nThe article should naturally address:\ncost concerns\nIVF success questions\nfear & anxiety\ntreatment duration\nIUI vs IVF confusion\ndiagnosis reasoning\nage-related fertility concerns\nemotional uncertainty\nwithout sounding SEO-driven.\nCONTENT QUALITY FILTER (MANDATORY)\nBefore final output, internally reject and improve content if it:\nsounds generic\nlacks fertility depth\nfeels AI-written\noveruses SEO keywords\nlacks emotional realism\nlacks treatment clarity\ncontains weak transitions\ncontains fabricated claims\nFINAL GOAL\nCreate fertility blogs that:\ngenuinely help patients\nfeel medically trustworthy\nfeel emotionally human\nrank because they are useful\nstrengthen Your Fertility Clinic authority\nuse YOUR_WEBSITE_DOMAIN for primary keywords \nHyperlink primary keywords only\nEXECUTION PRIORITY ORDER\nMandatory homepage keyword linking\nMedical trustworthiness\nHuman readability\nSearch intent optimisation\nSEO enhancement\nIf SEO conflicts with readability or trust:\nPRIORITISE TRUST AND READABILITY.\n\nNote: Primary keywords “சென்னையில் உள்ள சிறந்த IVF கிளினிக்” “சிறந்த கருவுறுதல் மருத்துவமனை” each should be mentioned AS IT IS and ONLY ONCE in the blog.`;\n\n// Single API call to the new Responses API using the flagship model + File Search\nconst response = await this.helpers.httpRequest({\n  method: 'POST',\n  url: 'https://api.openai.com/v1/responses',\n  headers: headers,\n  body: {\n    model: 'gpt-5.5',\n    instructions: systemInstructions,\n    input: chatInput,\n    tools: [\n      {\n        type: \"file_search\",\n        vector_store_ids: [\"YOUR_VECTOR_STORE_ID\"]\n      }\n    ],\n    text: {\n      format: {\n        type: \"json_schema\",\n        name: \"blog_post_generation\",\n        strict: true,\n        schema: blogSchema\n      }\n    }\n  },\n  json: true\n});\n\n// Extract the response output from Responses API structure\nconst assistantMessage = response.output.find(item => item.type === 'message' && item.role === 'assistant');\nif (!assistantMessage) {\n  throw new Error('No assistant message found in the response output.');\n}\n\nconst textItem = assistantMessage.content.find(c => c.text);\nconst outputText = textItem ? textItem.text : '';\n\nreturn {\n  json: {\n    output: outputText\n  }\n};\n"
+      },
+      "id": "7ea19a37-b8b8-4df5-a531-73aef4345598",
+      "name": "Generate Blog (OpenAI Assistant)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1056,
+        992
+      ],
+      "onError": "continueErrorOutput"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Start": {
+      "main": [
+        [
+          {
+            "node": "Get Pending Topics",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Pending Topics": {
+      "main": [
+        [
+          {
+            "node": "Get First Pending",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "Get Pending Topics",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get First Pending": {
+      "main": [
+        [
+          {
+            "node": "Generate Blog (OpenAI Assistant)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Blog JSON": {
+      "main": [
+        [
+          {
+            "node": "Ready?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ready?": {
+      "main": [
+        [
+          {
+            "node": "Resolve Featured Image",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Done (Skipped)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Resolve Featured Image": {
+      "main": [
+        [
+          {
+            "node": "Post to WordPress",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Post to WordPress": {
+      "main": [
+        [
+          {
+            "node": "Set SEO Meta",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set SEO Meta": {
+      "main": [
+        [
+          {
+            "node": "Mark Done",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mark Done": {
+      "main": [
+        [
+          {
+            "node": "Done",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate Blog (OpenAI Assistant)": {
+      "main": [
+        [
+          {
+            "node": "Parse Blog JSON",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": true
+  },
+  "versionId": "befd8ec2-1504-466e-87b6-cc00d1c57675",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "a52ac21da6be4f3f08e521fc12562914694a79c30b2aceabc3091fddd02cbbf1"
+  },
+  "id": "8OkYAHYeQO5pcBTX",
+  "tags": []
+}
